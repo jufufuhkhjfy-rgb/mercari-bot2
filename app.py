@@ -94,10 +94,11 @@ def get_items(keyword):
 # ===== 監視ループ =====
 def monitor():
 
+    send_discord("起動確認","bot started",0,"test")
+
     print("monitor start")
 
     while True:
-
         try:
 
             for keyword,max_price in SEARCH_SETTINGS.items():
