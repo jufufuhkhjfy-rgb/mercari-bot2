@@ -21,12 +21,12 @@ SEARCH_SETTINGS = {
 WEBHOOK_URL = "https://discordapp.com/api/webhooks/1476433652094341267/UVroNGFXVuigrRSmbFwebk0zCqNMC7XJJqh3obWt0MYXCk2s7qMhpG1ErqbjSfcitjoD"
 
 # 除外ワード
-ng_words = ["ジャンク","壊れ","オークション"]
+ng_words = ["ジャンク","壊れ","説明必読","オークション"]
 
 # 重複チェック保存ファイル
 CHECK_FILE = "checked.json"
 
-app = Flask("__main__")
+app = Flask(__name__)
 
 # ===== 重複URL読み込み =====
 def load_checked():
@@ -133,15 +133,8 @@ def monitor():
 def home():
     return "bot running"
 
-# 起動
-@app.route("/")
-def home():
-    return "bot running"
-
-
+# ===== 起動 =====
 if __name__ == "__main__":
-
-    print("monitor start")
 
     threading.Thread(target=monitor).start()
 
