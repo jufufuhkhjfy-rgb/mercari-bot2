@@ -59,31 +59,42 @@ def send_discord(keyword,title,price,url):
 # ===== メルカリ取得 =====
 def get_items(keyword):
 
-    url = f"https://jp.mercari.com/search?keyword={urllib.parse.quote(keyword)}"
+    url = "https://api.mercari.jp/v2/entities:search"
 
     headers = {
-        "User-Agent":"Mozilla/5.0",
-        "Accept-Language":"ja-JP"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0"
     }
 
-    r = requests.get(url,headers=headers)
+    payload = {
+        "query": keyword,
+        "page_token": None,
+        "sort": "created_time",
+        "order": "desc",
+        "limit": 20
+    }
+
+    r = requests.post(url, headers=headers, json=payload)
 
     print("取得:", keyword)
 
     items = []
 
-    pattern = r'"name":"(.*?)".*?"price":(\d+).*?"url":"(/item/.*?)"'
+    try:
+        data = r.json()["items"]
+    except:
+        return []
 
-    matches = re.findall(pattern, r.text)
+    for item in data:
 
-    for title, price, link in matches:
+        title = item["name"]
+        price = item["price"]
+        item_id = item["id"]
 
-        full_url = "https://jp.mercari.com"+link
+        full_url = f"https://jp.mercari.com/item/{item_id}"
 
         if full_url in checked_urls:
             continue
-
-        price = int(price)
 
         if any(w in title for w in ng_words):
             continue
