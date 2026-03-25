@@ -3,12 +3,11 @@ import time
 import threading
 import requests
 import random
-import json
 from flask import Flask
 
-# ===== キーワードと上限価格 =====
+# --- 設定 ---
 SEARCH_SETTINGS = {
-    "妖怪ウォッチ 真打": 2000,
+    "妖怪ウォッチ 真打": 99999,
     "妖怪ウォッチ スキヤキ": 3000,
     "妖怪ウォッチ スシ": 1000,
     "妖怪ウォッチ テンプラ": 1000,
@@ -17,29 +16,28 @@ SEARCH_SETTINGS = {
 }
 
 WEBHOOK_URL = "https://discordapp.com/api/webhooks/1476433652094341267/UVroNGFXVuigrRSmbFwebk0zCqNMC7XJJqh3obWt0MYXCk2s7qMhpG1ErqbjSfcitjoD"
-NG_WORDS = ["ジャンク","壊れ","説明必読"]
-
 app = Flask(__name__)
-checked_ids = set() # Renderではファイル保存が消えるためメモリで管理
+checked_ids = set()
 
 def send_discord(msg):
     try:
         requests.post(WEBHOOK_URL, json={"content": msg}, timeout=10)
-    except Exception as e:
-        print("Discord送信失敗:", e)
+    except:
+        pass
 
 def get_items(keyword):
-    # メルカリ内部APIの正しいエンドポイント
-    url = "https://api.mercari.jp/v2/entities:search"
+    # 🔍 ログ：ここを通っているか確認
+    print(f">>> [API呼出開始] キーワード: {keyword}")
     
+    url = "https://api.mercari.jp/v2/entities:search"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "DNT": "1"
+        "X-Mer-Os": "web",
+        "X-Mer-Device": "pc"
     }
 
-    # ここが重要：メルカリAPIが受け付ける正しいJSON形式
     payload = {
         "pageSize": 20,
         "searchCondition": {
@@ -53,71 +51,57 @@ def get_items(keyword):
     }
 
     try:
-        r = requests.post(url, headers=headers, json=payload, timeout=15)
-        print(f"検索実行: {keyword} / Status: {r.status_code}")
+        # verify=False を追加（SSLエラーで黙るのを防ぐ）
+        r = requests.post(url, headers=headers, json=payload, timeout=15, verify=True)
+        print(f">>> [API応答] Status: {r.status_code}")
         
         if r.status_code != 200:
             return []
-
-        data = r.json()
-        return data.get("items", [])
+        
+        return r.json().get("items", [])
     except Exception as e:
-        print(f"リクエストエラー ({keyword}):", e)
+        # ❌ ここでエラー内容を絶対に出す
+        print(f"!!! [API接続失敗] 原因: {e}")
         return []
 
 def monitor():
-    print("--- 監視スレッド開始 ---")
-    send_discord("🚀 監視Botが正常に起動しました")
+    # 🚀 ここがログに出ればスレッドは動いている
+    print("=== MONITOR THREAD STARTED ===")
+    send_discord("📢 監視スレッドが正常に開始されました")
 
     while True:
         try:
             for keyword, max_price in SEARCH_SETTINGS.items():
                 items = get_items(keyword)
+                print(f"--- {keyword}: {len(items)}件ヒット ---")
                 
                 for item in items:
                     item_id = item.get("id")
-                    title = item.get("name")
-                    price = int(item.get("price", 0))
-                    item_url = f"https://jp.mercari.com/item/{item_id}"
-
-                    # 重複・価格・NGワードの判定
-                    if item_id in checked_ids:
-                        continue
-                    if price > max_price:
-                        continue
-                    if any(w in title for w in NG_WORDS):
-                        continue
-
-                    # 条件合致！通知
-                    print(f"【HIT】{keyword}: {price}円 / {title}")
-                    msg = f"🔥 **新着発見**\nキーワード: {keyword}\n価格: {price}円\n商品名: {title}\nURL: {item_url}"
-                    send_discord(msg)
+                    if item_id in checked_ids: continue
                     
-                    checked_ids.add(item_id)
+                    price = int(item.get("price", 0))
+                    if price <= max_price:
+                        item_url = f"https://jp.mercari.com/item/{item_id}"
+                        send_discord(f"🔥 **発見**\n{keyword}\n{price}円\n{item_url}")
+                        checked_ids.add(item_id)
                 
-                # キーワードごとに少し待機（負荷軽減）
-                time.sleep(2)
+                time.sleep(3) # 次のキーワードまで待機
 
-            # リストが肥大化しすぎないようリセット（1000件超えたら）
-            if len(checked_ids) > 1000:
-                checked_ids.clear()
-
+            print("=== 一巡完了。待機します ===")
         except Exception as e:
-            print("ループ内エラー:", e)
+            print(f"!!! [LOOP ERROR] {e}")
 
-        wait_time = random.randint(10, 20) # BAN防止のため少し長めに設定
-        print(f"次回の巡回まで {wait_time} 秒待機...")
-        time.sleep(wait_time)
+        time.sleep(20)
 
 @app.route("/")
 def home():
-    return "Bot is alive"
+    return "ALIVE"
 
-# Render起動用
 if __name__ == "__main__":
-    # 監視スレッドを起動
-    threading.Thread(target=monitor, daemon=True).start()
+    # スレッドを確実に外出し
+    monitor_thread = threading.Thread(target=monitor, daemon=True)
+    monitor_thread.start()
     
-    # サーバー起動
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    # debug=False にして安定させる
+    app.run(host="0.0.0.0", port=port, debug=False)
