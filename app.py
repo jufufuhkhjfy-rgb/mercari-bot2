@@ -1,10 +1,8 @@
 import time
-import re
 import threading
 import requests
 import random
 import json
-import urllib.parse
 from flask import Flask
 
 # ===== キーワードと上限価格 =====
@@ -17,18 +15,15 @@ SEARCH_SETTINGS = {
     "妖怪ウォッチ 赤猫団": 2200
 }
 
-# Discord webhook
-WEBHOOK_URL = "https://discordapp.com/api/webhooks/1476433652094341267/UVroNGFXVuigrRSmbFwebk0zCqNMC7XJJqh3obWt0MYXCk2s7qMhpG1ErqbjSfcitjoD"
+WEBHOOK_URL = "ここにWebhook"
 
-# 除外ワード
 ng_words = ["ジャンク","壊れ","説明必読","オークション"]
 
-# 重複チェック保存ファイル
 CHECK_FILE = "checked.json"
 
 app = Flask(__name__)
 
-# ===== 重複URL読み込み =====
+# ===== 重複読み込み =====
 def load_checked():
     try:
         with open(CHECK_FILE,"r") as f:
@@ -36,54 +31,59 @@ def load_checked():
     except:
         return set()
 
-# ===== 保存 =====
+checked_urls = load_checked()
+
 def save_checked():
     with open(CHECK_FILE,"w") as f:
         json.dump(list(checked_urls),f)
 
-checked_urls = load_checked()
-
-# ===== Discord通知 =====
+# ===== Discord =====
 def send_discord(keyword,title,price,url):
 
-    data = {
-        "content":
+    msg = (
         f"🔥 {keyword}\n"
         f"{price}円\n"
         f"{title}\n"
         f"{url}"
-    }
+    )
 
-    requests.post(WEBHOOK_URL,json=data)
+    try:
+        requests.post(WEBHOOK_URL,json={"content":msg},timeout=10)
+    except Exception as e:
+        print("discord error",e)
 
-# ===== メルカリ取得 =====
+# ===== Mercari =====
 def get_items(keyword):
 
     url = "https://api.mercari.jp/v2/entities:search"
 
     headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0"
+        "User-Agent": "Mozilla/5.0",
+        "Accept-Language": "ja-JP"
     }
 
     payload = {
-        "query": keyword,
-        "page_token": None,
+        "keyword": keyword,
         "sort": "created_time",
         "order": "desc",
-        "limit": 20
+        "limit": 20,
+        "status": "on_sale"
     }
 
-    r = requests.post(url, headers=headers, json=payload)
+    r = requests.post(url,headers=headers,json=payload,timeout=10)
 
-    print("取得:", keyword)
+    print("取得:",keyword,"status",r.status_code)
 
-    items = []
+    if r.status_code != 200:
+        return []
 
     try:
         data = r.json()["items"]
     except:
+        print("json decode error")
         return []
+
+    results = []
 
     for item in data:
 
@@ -91,25 +91,29 @@ def get_items(keyword):
         price = item["price"]
         item_id = item["id"]
 
-        full_url = f"https://jp.mercari.com/item/{item_id}"
+        item_url = f"https://jp.mercari.com/item/{item_id}"
 
-        if full_url in checked_urls:
+        if item_url in checked_urls:
             continue
 
         if any(w in title for w in ng_words):
             continue
 
-        items.append((title,price,full_url))
+        results.append((title,price,item_url))
 
-    return items
-# ===== 監視ループ =====
+    return results
+
+# ===== 監視 =====
 def monitor():
-
-    send_discord("起動確認","bot started",0,"test")
 
     print("monitor start")
 
+    send_discord("起動確認","bot started",0,"")
+
+    time.sleep(3)
+
     while True:
+
         try:
 
             for keyword,max_price in SEARCH_SETTINGS.items():
@@ -120,7 +124,7 @@ def monitor():
 
                     if price <= max_price:
 
-                        print(keyword,price)
+                        print("HIT",keyword,price)
 
                         send_discord(keyword,title,price,url)
 
@@ -129,7 +133,8 @@ def monitor():
                         save_checked()
 
         except Exception as e:
-            print("error",e)
+
+            print("loop error",e)
 
         wait = random.randint(5,15)
 
@@ -137,14 +142,23 @@ def monitor():
 
         time.sleep(wait)
 
-# ===== Render確認ページ =====
+# ===== Flask =====
 @app.route("/")
 def home():
     return "bot running"
 
+# ===== thread開始 =====
+def start_bot():
 
-# ===== Render起動時に必ず監視開始 =====
-threading.Thread(target=monitor, daemon=True).start()
+    t = threading.Thread(target=monitor)
 
+    t.daemon = True
+
+    t.start()
+
+start_bot()
+
+# ===== local =====
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+
+    app.run(host="0.0.0.0",port=10000)
