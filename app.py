@@ -7,7 +7,7 @@ from flask import Flask
 
 # --- 設定 ---
 SEARCH_SETTINGS = {
-    "妖怪ウォッチ 真打": 99999,
+    "妖怪ウォッチ 真打": 99999,  # これでテスト！
     "妖怪ウォッチ スキヤキ": 3000,
     "妖怪ウォッチ スシ": 1000,
     "妖怪ウォッチ テンプラ": 1000,
@@ -16,18 +16,19 @@ SEARCH_SETTINGS = {
 }
 
 WEBHOOK_URL = "https://discordapp.com/api/webhooks/1476433652094341267/UVroNGFXVuigrRSmbFwebk0zCqNMC7XJJqh3obWt0MYXCk2s7qMhpG1ErqbjSfcitjoD"
+
 app = Flask(__name__)
 checked_ids = set()
 
-def send_discord(msg):
+def send_discord(text):
     try:
-        requests.post(WEBHOOK_URL, json={"content": msg}, timeout=10)
+        requests.post(WEBHOOK_URL, json={"content": text}, timeout=10)
     except:
         pass
 
 def get_items(keyword):
-    # 🔍 ログ：ここを通っているか確認
-    print(f">>> [API呼出開始] キーワード: {keyword}")
+    # ログに出して進捗を確認
+    print(f"🧐 {keyword} を検索中...")
     
     url = "https://api.mercari.jp/v2/entities:search"
     headers = {
@@ -35,11 +36,14 @@ def get_items(keyword):
         "Accept": "application/json",
         "Content-Type": "application/json",
         "X-Mer-Os": "web",
-        "X-Mer-Device": "pc"
+        "X-Mer-Device": "pc",
+        "DNT": "1"
     }
 
+    # メルカリ最新仕様のPayload
     payload = {
         "pageSize": 20,
+        "searchSessionId": "test_" + str(int(time.time())),
         "searchCondition": {
             "keyword": keyword,
             "sort": "SORT_CREATED_TIME",
@@ -51,57 +55,60 @@ def get_items(keyword):
     }
 
     try:
-        # verify=False を追加（SSLエラーで黙るのを防ぐ）
-        r = requests.post(url, headers=headers, json=payload, timeout=15, verify=True)
-        print(f">>> [API応答] Status: {r.status_code}")
-        
+        r = requests.post(url, headers=headers, json=payload, timeout=15)
         if r.status_code != 200:
+            print(f"❌ APIエラー: {r.status_code}")
             return []
         
-        return r.json().get("items", [])
+        data = r.json()
+        items = data.get("items", [])
+        print(f"✨ 検索結果: {len(items)}件見つかりました") # ここが重要！
+        return items
     except Exception as e:
-        # ❌ ここでエラー内容を絶対に出す
-        print(f"!!! [API接続失敗] 原因: {e}")
+        print(f"❌ 通信エラー: {e}")
         return []
 
 def monitor():
-    # 🚀 ここがログに出ればスレッドは動いている
-    print("=== MONITOR THREAD STARTED ===")
-    send_discord("📢 監視スレッドが正常に開始されました")
-
+    print("=== 🤖 監視スレッド：本格稼働開始 ===")
+    send_discord("📢 監視を開始しました。真打99999円設定でテスト中...")
+    
     while True:
         try:
             for keyword, max_price in SEARCH_SETTINGS.items():
                 items = get_items(keyword)
-                print(f"--- {keyword}: {len(items)}件ヒット ---")
                 
                 for item in items:
                     item_id = item.get("id")
-                    if item_id in checked_ids: continue
-                    
+                    if not item_id or item_id in checked_ids:
+                        continue
+                        
                     price = int(item.get("price", 0))
                     if price <= max_price:
-                        item_url = f"https://jp.mercari.com/item/{item_id}"
-                        send_discord(f"🔥 **発見**\n{keyword}\n{price}円\n{item_url}")
+                        title = item.get("name")
+                        url = f"https://jp.mercari.com/item/{item_id}"
+                        send_discord(f"🎯 **【{keyword}】**\n価格: {price}円\n商品名: {title}\n{url}")
                         checked_ids.add(item_id)
                 
-                time.sleep(3) # 次のキーワードまで待機
+                time.sleep(3) # キーワード間の休憩
 
-            print("=== 一巡完了。待機します ===")
+            if len(checked_ids) > 1000:
+                checked_ids.clear()
+
         except Exception as e:
-            print(f"!!! [LOOP ERROR] {e}")
-
-        time.sleep(20)
+            print(f"💥 ループエラー: {e}")
+        
+        wait = random.randint(15, 30)
+        print(f"☕ 巡回完了。{wait}秒待機します...")
+        time.sleep(wait)
 
 @app.route("/")
 def home():
-    return "ALIVE"
+    return "Bot is running!"
 
 if __name__ == "__main__":
-    # スレッドを確実に外出し
-    monitor_thread = threading.Thread(target=monitor, daemon=True)
-    monitor_thread.start()
+    # スレッド起動
+    threading.Thread(target=monitor, daemon=True).start()
     
+    # ポート設定
     port = int(os.environ.get("PORT", 10000))
-    # debug=False にして安定させる
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port)
