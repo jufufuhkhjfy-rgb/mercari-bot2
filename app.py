@@ -21,7 +21,7 @@ SEARCH_SETTINGS = {
 WEBHOOK_URL = "https://discordapp.com/api/webhooks/1476433652094341267/UVroNGFXVuigrRSmbFwebk0zCqNMC7XJJqh3obWt0MYXCk2s7qMhpG1ErqbjSfcitjoD"
 
 # 除外ワード
-ng_words = ["ジャンク","壊れ","説明必読","オークション"]
+ng_words = ["ジャンク","壊れ","オークション"]
 
 # 重複チェック保存ファイル
 CHECK_FILE = "checked.json"
@@ -78,7 +78,6 @@ def get_items(keyword):
         if full_url in checked_urls:
             continue
 
-        # 価格とタイトル取得
         block = re.search(link+r'.*?¥([\d,]+).*?>(.*?)<',r.text,re.S)
 
         if not block:
@@ -88,7 +87,6 @@ def get_items(keyword):
 
         title = re.sub("<.*?>","",block.group(2))
 
-        # NGワード除外
         if any(w in title for w in ng_words):
             continue
 
@@ -98,6 +96,8 @@ def get_items(keyword):
 
 # ===== 監視ループ =====
 def monitor():
+
+    print("monitor start")
 
     while True:
 
@@ -122,14 +122,13 @@ def monitor():
         except Exception as e:
             print("error",e)
 
-        # 5〜15秒待機
         wait = random.randint(5,15)
 
         print("wait",wait)
 
         time.sleep(wait)
 
-# ===== Renderが起動確認に使うページ =====
+# ===== Render確認ページ =====
 @app.route("/")
 def home():
     return "bot running"
