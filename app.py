@@ -15,7 +15,7 @@ SEARCH_SETTINGS = {
     "妖怪ウォッチ 赤猫団": 2200
 }
 
-WEBHOOK_URL = "ここにWebhook"
+WEBHOOK_URL = "https://discordapp.com/api/webhooks/1476433652094341267/UVroNGFXVuigrRSmbFwebk0zCqNMC7XJJqh3obWt0MYXCk2s7qMhpG1ErqbjSfcitjoD"
 
 ng_words = ["ジャンク","壊れ","説明必読","オークション"]
 
