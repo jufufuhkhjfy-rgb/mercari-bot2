@@ -134,7 +134,15 @@ def home():
     return "bot running"
 
 # 起動
-threading.Thread(target=monitor,daemon=True).start()
+@app.route("/")
+def home():
+    return "bot running"
+
 
 if __name__ == "__main__":
+
+    print("monitor start")
+
+    threading.Thread(target=monitor).start()
+
     app.run(host="0.0.0.0",port=10000)
