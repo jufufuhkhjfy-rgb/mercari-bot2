@@ -67,25 +67,22 @@ def get_items(keyword):
 
     r = requests.get(url,headers=headers)
 
-    links = re.findall(r'href="(/item/.*?)"',r.text)
+    print("取得:", keyword)
 
     items = []
 
-    for link in links:
+    pattern = r'(/item/[a-zA-Z0-9]+).*?¥([\d,]+).*?alt="(.*?)"'
+
+    matches = re.findall(pattern, r.text, re.S)
+
+    for link, price, title in matches:
 
         full_url = "https://jp.mercari.com"+link
 
         if full_url in checked_urls:
             continue
 
-        block = re.search(link+r'.*?¥([\d,]+).*?>(.*?)<',r.text,re.S)
-
-        if not block:
-            continue
-
-        price = int(block.group(1).replace(",",""))
-
-        title = re.sub("<.*?>","",block.group(2))
+        price = int(price.replace(",",""))
 
         if any(w in title for w in ng_words):
             continue
