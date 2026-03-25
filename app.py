@@ -59,10 +59,11 @@ def send_discord(keyword,title,price,url):
 # ===== メルカリ取得 =====
 def get_items(keyword):
 
-    url = f"https://jp.mercari.com/search?keyword={urllib.parse.quote(keyword)}&sort=created_time&order=desc"
+    url = f"https://jp.mercari.com/search?keyword={urllib.parse.quote(keyword)}"
 
     headers = {
-        "User-Agent":"Mozilla/5.0"
+        "User-Agent":"Mozilla/5.0",
+        "Accept-Language":"ja-JP"
     }
 
     r = requests.get(url,headers=headers)
@@ -71,18 +72,18 @@ def get_items(keyword):
 
     items = []
 
-    pattern = r'(/item/[a-zA-Z0-9]+).*?¥([\d,]+).*?alt="(.*?)"'
+    pattern = r'"name":"(.*?)".*?"price":(\d+).*?"url":"(/item/.*?)"'
 
-    matches = re.findall(pattern, r.text, re.S)
+    matches = re.findall(pattern, r.text)
 
-    for link, price, title in matches:
+    for title, price, link in matches:
 
         full_url = "https://jp.mercari.com"+link
 
         if full_url in checked_urls:
             continue
 
-        price = int(price.replace(",",""))
+        price = int(price)
 
         if any(w in title for w in ng_words):
             continue
@@ -90,7 +91,6 @@ def get_items(keyword):
         items.append((title,price,full_url))
 
     return items
-
 # ===== 監視ループ =====
 def monitor():
 
