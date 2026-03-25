@@ -130,9 +130,9 @@ def monitor():
 def home():
     return "bot running"
 
-# ===== 起動 =====
+
+# ===== Render起動時に必ず監視開始 =====
+threading.Thread(target=monitor, daemon=True).start()
+
 if __name__ == "__main__":
-
-    threading.Thread(target=monitor).start()
-
-    app.run(host="0.0.0.0",port=10000)
+    app.run(host="0.0.0.0", port=10000)
