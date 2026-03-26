@@ -27,55 +27,57 @@ def send_discord(text):
 
 def get_items(keyword):
     url = "https://api.mercari.jp/v2/entities:search"
-    # 【最重要】ブラウザの動きを完全に再現するヘッダー
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
         "Content-Type": "application/json",
-        "Origin": "https://jp.mercari.com",
-        "Referer": "https://jp.mercari.com/",
-        "DNT": "1",
         "X-Mer-Os": "web",
-        "X-Mer-Device": "pc"
+        "X-Mer-Device": "pc",
+        "Origin": "https://jp.mercari.com",
+        "Referer": "https://jp.mercari.com/"
     }
     
+    # 400エラーを防ぐための、最新の検索データ形式
     payload = {
         "pageSize": 20,
         "searchCondition": {
             "keyword": keyword,
-            "status": ["ITEM_STATUS_ON_SALE"],
             "sort": "SORT_CREATED_TIME",
-            "order": "ORDER_DESC"
+            "order": "ORDER_DESC",
+            "status": ["ITEM_STATUS_ON_SALE"],
+            "category_id": [], # 空でもリスト形式にする
+            "brand_id": [],
+            "seller_id": [],
+            "feature_id": [],
+            "exclude_keyword": ""
         },
         "serviceName": "mercari",
         "indexName": "main"
     }
 
     try:
-        # HTTP/2を有効にしてよりブラウザに近づける
-        with httpx.Client(headers=headers, timeout=15.0, verify=False, http2=True) as client:
+        # http2をTrueにすると、より「本物のブラウザ」っぽくなります
+        with httpx.Client(headers=headers, timeout=15.0, http2=True) as client:
             r = client.post(url, json=payload)
             if r.status_code == 200:
                 return r.json().get("items", [])
             else:
-                # エラーが出たら詳細を送る（デバッグ用）
+                # 400エラーが出た場合、Discordに詳細を出す（原因特定のヒント）
                 print(f"Error {r.status_code}")
                 return None
     except Exception as e:
-        print(f"Exception: {e}")
         return None
 
 def monitor():
-    send_discord("🔥 セキュリティ突破モードで再起動しました。")
+    send_discord("🛠️ 検索エンジンを最新式にアップデートしました。再試行します。")
     
     while True:
         try:
             for target in SEARCH_LIST:
                 items = get_items(target["name"])
                 
-                # itemsがNone（エラー）じゃなければ成功
                 if items is not None:
+                    # 接続成功！
                     for item in items:
                         item_id = item.get("id")
                         if item_id and item_id not in checked_ids:
@@ -85,17 +87,18 @@ def monitor():
                                 send_discord(f"🎯 【発見】{target['name']}\n価格: {price}円\n{url}")
                             checked_ids.add(item_id)
                 else:
-                    # 400エラー等で失敗している場合
-                    pass 
+                    # まだ400が出る場合は、1回だけ通知して休む
+                    # send_discord("⚠️ まだ門前払いされています...") 
+                    pass
                 
-                time.sleep(random.uniform(5, 10)) # 動きをランダムにして機械っぽさを消す
+                time.sleep(random.uniform(10, 20)) # 少し間隔を空けて「怪しさ」を消す
         except:
             pass
         time.sleep(30)
 
 @app.route("/")
 def home():
-    return "WORKING"
+    return "ONLINE"
 
 if __name__ == "__main__":
     t = threading.Thread(target=monitor, daemon=True)
